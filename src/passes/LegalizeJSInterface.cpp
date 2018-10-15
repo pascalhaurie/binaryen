@@ -247,18 +247,30 @@ private:
     bool getterExists = module->getExportOrNull(GET_TEMP_RET_0) != nullptr;
     bool setterExists = module->getExportOrNull(SET_TEMP_RET_0) != nullptr;
 
-    if (!module->getGlobalOrNull(TEMP_RET_0)) {
-      if (getterExists)
-        Fatal() << "tempRet0 global not found but getTempRet0 exists";
-      if (setterExists)
-        Fatal() << "tempRet0 global not found but setTempRet0 exists";
-      module->addGlobal(Builder::makeGlobal(
-        TEMP_RET_0,
-        i32,
-        LiteralUtils::makeZero(i32, *module),
-        Builder::Mutable
-      ));
+    if (module->getGlobalOrNull(TEMP_RET_0)) {
+      // The global already exists.   Ensure we also have the getter and setter.
+      if (getterExists) {
+        Fatal() << "tempRet0 global exists but getTempRet0 not found";
+      }
+      if (setterExists) {
+        Fatal() << "tempRet0 global exists but setTempRet0 not found";
+      }
+      return;
     }
+
+    if (getterExists) {
+      Fatal() << "getTempRet0 found but not tempRet0 globals";
+    }
+    if (setterExists) {
+      Fatal() << "setTempRet0 found but not tempRet0 globals";
+    }
+
+    module->addGlobal(Builder::makeGlobal(
+      TEMP_RET_0,
+      i32,
+      LiteralUtils::makeZero(i32, *module),
+      Builder::Mutable
+    ));
 
     // We should also let JS access the tempRet0 global, which is necessary
     // to (among other things) send/receive 64-bit return values.
@@ -280,26 +292,23 @@ private:
       export_->kind = ExternalKind::Function;
       module->addExport(export_);
     };
-    if (!getterExists) {
-      Builder builder(*module);
-      auto* func = new Function();
-      func->name = GET_TEMP_RET_0;
-      func->result = i32;
-      func->body = builder.makeGetGlobal(TEMP_RET_0, i32);
-      exportIt(func);
-    }
-    if (!setterExists) {
-      Builder builder(*module);
-      auto* func = new Function();
-      func->name = SET_TEMP_RET_0;
-      func->result = none;
-      func->params.push_back(i32);
-      func->body = builder.makeSetGlobal(
-        TEMP_RET_0,
-        builder.makeGetLocal(0, i32)
-      );
-      exportIt(func);
-    }
+
+    Builder builder(*module);
+    auto* getter = new Function();
+    getter->name = GET_TEMP_RET_0;
+    getter->result = i32;
+    getter->body = builder.makeGetGlobal(TEMP_RET_0, i32);
+    exportIt(getter);
+
+    auto* setter = new Function();
+    setter->name = SET_TEMP_RET_0;
+    setter->result = none;
+    setter->params.push_back(i32);
+    setter->body = builder.makeSetGlobal(
+      TEMP_RET_0,
+      builder.makeGetLocal(0, i32)
+    );
+    exportIt(setter);
   }
 };
 
